@@ -1,6 +1,8 @@
 import pygame
 import os
+import pygame_gui
 import utils
+from interface import Interface
 
 
 class App:
@@ -21,38 +23,63 @@ class App:
         self.screen = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
         pygame.display.set_caption("Manipulacao de Imagens")
         self.font = pygame.font.SysFont("Arial", 30, bold=True)
+        self.clock = pygame.time.Clock()
 
         self.image_paths = self._get_image_paths()
         self.current_image_index = 0
-        print(self.image_paths)
+        self._change_image()
         # TO-DO
-        self.original_image = utils.load_image(
-            self.image_paths[self.current_image_index]
+
+        self.interface = Interface(
+            self.WIDTH, self.HEIGHT, self.reset_image, self.next_image, self.prev_image
         )
-        self.processed_image = self.original_image.copy()
-
-        print(self.original_image)
-        # TO-DO
-        # Interface botoes sliders etc
-
-        # TO-DO
-        # filtros >:)
 
         self.running = True
+
+    def apply_filter(self, filter, obj):
+        print(obj)
+        if obj == "button":
+            self.processed_image = self.interface.button_actions[filter](
+                self.original_image
+            )
+        else:
+            print(filter.get_current_value())
+            self.processed_image = self.interface.button_actions[filter](
+                self.original_image, filter.get_current_value()
+            )
 
     def _handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
 
-        keys = pygame.key.get_pressed()
+            self.interface.manager.process_events(event)
+            if event.type == pygame_gui.UI_HORIZONTAL_SLIDER_MOVED:
+
+                self.apply_filter(event.ui_element, "slider")
+            if (
+                event.type == pygame_gui.UI_BUTTON_PRESSED
+                and event.ui_element in self.interface.button_actions.keys()
+            ):
+                print("event")
+                self.apply_filter(event.ui_element, "button")
+
+            if (
+                event.type == pygame_gui.UI_BUTTON_PRESSED
+                and event.ui_element in self.interface.interface_actions.keys()
+            ):
+                print("event")
+                self.interface.interface_actions[event.ui_element]()
 
     def _render(self):
         """
         Renderiza os elementos na tela
         """
-        self.screen.fill(self.colors["white"])
+        time_delta = self.clock.tick(60) / 1000
+        self.interface.manager.update(time_delta)
+        self.screen.fill((30, 30, 30))
         self._display_images()
+        self.interface.manager.draw_ui(self.screen)
         pygame.display.update()
 
     def _get_image_paths(self):
@@ -83,19 +110,48 @@ class App:
         self.screen.blit(original_surface, (original_x, y_pos))
         self.screen.blit(processed_surface, (processed_x, y_pos))
 
-        original_label = self.font.render("Imagem Original", True, self.colors["black"])
+        original_label = self.font.render("Imagem Original", True, self.colors["white"])
         processed_label = self.font.render(
-            "Imagem Processada", True, self.colors["black"]
+            "Imagem Processada", True, self.colors["white"]
         )
 
         self.screen.blit(original_label, (original_x, y_pos - 30))
         self.screen.blit(processed_label, (processed_x, y_pos - 30))
 
+    def next_image(self):
+        print(self.current_image_index)
+        next_image = self.current_image_index + 1
+        if next_image >= len(self.image_paths):
+            self.current_image_index = 0
+        else:
+            self.current_image_index = next_image
+        print(next_image)
+        self._change_image()
+
+    def prev_image(self):
+        next_image = self.current_image_index - 1
+        if next_image < 0:
+            self.current_image_index = len(self.image_paths) - 1
+        else:
+            self.current_image_index = next_image
+        self._change_image()
+
+    def _change_image(self):
+        self.original_image = utils.load_image(
+            self.image_paths[self.current_image_index]
+        )
+        self.processed_image = self.original_image.copy()
+
+    def reset_image(self):
+        self.processed_image = self.original_image
+        self.interface.binary_slider.set_current_value(50)
+        self.interface.contrast_slider.set_current_value(50)
+        self.interface.isolate_color_slider.set_current_value(50)
+
     def run(self):
         while self.running:
             self._render()
             self._handle_events()
-            pygame.time.Clock().tick(30)
         pygame.quit()
 
 
